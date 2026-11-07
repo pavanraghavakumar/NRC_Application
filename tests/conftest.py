@@ -29,9 +29,12 @@ def client(tmp_path: Path) -> TestClient:
       owner_user_id TEXT, owner_team_id TEXT, created_on TEXT, created_by_id TEXT,
       modified_on TEXT, modified_by_id TEXT, row_version INTEGER NOT NULL DEFAULT 1
     ) STRICT;
+    CREATE TABLE ref_office (id TEXT PRIMARY KEY, office TEXT NOT NULL, state TEXT DEFAULT 'active', row_version INTEGER NOT NULL DEFAULT 1) STRICT;
+    CREATE TABLE perf_performance_indicator_office (id TEXT PRIMARY KEY, performance_indicator_id TEXT NOT NULL, office_id TEXT NOT NULL, UNIQUE(performance_indicator_id, office_id)) STRICT;
+    CREATE TABLE wf_field_audit (id INTEGER PRIMARY KEY, table_name TEXT, record_id TEXT, column_name TEXT, old_value TEXT, new_value TEXT, operation TEXT, changed_by_id TEXT, changed_on TEXT, correlation_id TEXT) STRICT;
+    CREATE VIEW analytics_strategic_planning_home AS SELECT id, goal, goal_text FROM plan_goal;
     """)
     conn.close()
     settings = Settings(database, "development", True, None, None, None, None, 1000, tmp_path / "files")
     with TestClient(create_app(settings)) as test_client:
         yield test_client
-

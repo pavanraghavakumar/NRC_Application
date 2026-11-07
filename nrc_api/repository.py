@@ -28,12 +28,13 @@ class Repository:
 
     @staticmethod
     def _visible_sql(columns: dict[str, sqlite3.Row], principal: Principal, operation: str) -> tuple[str, list[Any]]:
-        if principal.is_edo or operation == "read":
+        if principal.is_edo:
             return "1=1", []
         if "owner_user_id" in columns and "owner_team_id" in columns:
             placeholders = ",".join("?" for _ in principal.team_ids) or "NULL"
             return f"(owner_user_id=? OR owner_team_id IN ({placeholders}))", [principal.id, *principal.team_ids]
-        return "0=1", []
+        # Public/reference rows without ownership columns are readable by authenticated users.
+        return ("1=1", []) if operation == "read" and "owner_user_id" not in columns else ("0=1", [])
 
     def list(self, resource: Resource, principal: Principal, query: dict[str, Any]) -> dict[str, Any]:
         page = max(1, int(query.get("page", 1)))
@@ -116,6 +117,9 @@ class Repository:
             if not old:
                 raise ApiError(404, "NOT_FOUND", "The record does not exist or is not visible.")
             old_dict = dict(old)
+            visibility, visibility_params = self._visible_sql(columns, principal, "write")
+            visible = conn.execute(f'SELECT 1 FROM "{resource.table}" WHERE id=? AND {visibility}', (record_id, *visibility_params)).fetchone()
+            if not visible: raise ApiError(404, "NOT_FOUND", "The record does not exist or is not visible.")
             if not principal.is_edo and old_dict.get("status_reason") not in {None, "draft", "revision"}:
                 raise ApiError(403, "RECORD_LOCKED", "The record is locked outside Draft or Revision.")
             if "row_version" in columns:
@@ -144,6 +148,9 @@ class Repository:
             row = conn.execute(f'SELECT * FROM "{resource.table}" WHERE id=?', (record_id,)).fetchone()
             if not row: raise ApiError(404, "NOT_FOUND", "The record does not exist or is not visible.")
             item = dict(row)
+            visibility, visibility_params = self._visible_sql(columns, principal, "delete")
+            if not conn.execute(f'SELECT 1 FROM "{resource.table}" WHERE id=? AND {visibility}', (record_id, *visibility_params)).fetchone():
+                raise ApiError(404, "NOT_FOUND", "The record does not exist or is not visible.")
             if not principal.is_edo and (item.get("status_reason") != "draft" or item.get("owner_user_id") != principal.id):
                 raise ApiError(403, "RECORD_LOCKED", "Only an owner may delete their Draft record.")
             conn.execute(f'DELETE FROM "{resource.table}" WHERE id=?', (record_id,))
@@ -160,3 +167,8 @@ class Repository:
                 if before.get(field) != after.get(field):
                     conn.execute("INSERT INTO wf_field_audit(table_name,record_id,column_name,old_value,new_value,operation,changed_by_id,changed_on,correlation_id) VALUES(?,?,?,?,?,?,?,?,?)", (table, record_id, field, json.dumps(before.get(field)), json.dumps(after.get(field)), operation, user_id, utc_now(), correlation_id))
 
+    def audit(self, resource: Resource, record_id: str, principal: Principal) -> list[dict[str, Any]]:
+        self.get(resource, record_id, principal)
+        with self.db.read() as conn:
+            if not self.db.table_exists(conn, "wf_field_audit"): return []
+            return [dict(x) for x in conn.execute("SELECT * FROM wf_field_audit WHERE table_name=? AND record_id=? ORDER BY changed_on DESC", (resource.table, record_id))]

@@ -25,3 +25,9 @@ Only when `NRC_DEV_AUTH=true`, requests may send `X-Dev-User-Id`, `X-Dev-Name`, 
 ## Decisions used for documented gaps
 
 The clarification round received no answer, so implementation uses the specification's recommended defaults: configurable approval queues with one-stage chains supported; restricted CBJ/APPR and Agencywide creation for both Performance Indicators and Enterprise Risks; owners may delete their own Draft records; federal fiscal years begin October 1; notification delivery uses an outbox with in-app, e-mail, and Teams adapters. Provider credentials and environment topology are deployment configuration and are never committed.
+
+## Extended API services
+
+The API exposes schema-introspected relationship collections, seeded navigation/view/form/option-set/business-rule/command metadata, structured live analytics responses, field audit and timeline views, idempotent bulk workflow commands, task completion, notification preferences, background-job controls, CSV export/import validation, and 32 MB attachment upload/download. Optional workflow persistence tables are used when installed; otherwise process-local stores support development and tests without creating a second migration system. Attachment paths use generated UUID directories and basename validation.
+
+Resource reads and writes enforce owner/team visibility for owned tables. EDO users retain organisation scope, while reference tables without ownership columns remain readable to authenticated users. Unknown fields, invalid filters/sorts, stale row versions, reused idempotency keys with different payloads, unsafe filenames, unsupported formats, excessive files/rows, missing relationships, invalid workflow transitions, and unavailable analytics views fail closed with RFC 9457 problem details.
