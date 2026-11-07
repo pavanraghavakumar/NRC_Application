@@ -1,0 +1,18 @@
+[project]
+name = "nrc-spa-api"
+version = "0.1.0"
+description = "NRC Strategic Planning and Performance Management API"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi>=0.141,<1",
+  "pydantic>=2.13,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+test = ["httpx>=0.28,<1", "pytest>=9,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
