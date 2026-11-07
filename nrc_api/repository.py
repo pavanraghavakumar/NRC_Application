@@ -9,7 +9,7 @@ from typing import Any
 
 from .auth import Principal
 from .catalog import Resource
-from .db import Database
+from .db import ConcurrencyConflict, Database, draw_identifier
 from .errors import ApiError
 
 
@@ -98,6 +98,17 @@ class Repository:
                 raise ApiError(400, "VALIDATION_FAILED", "Unknown fields were supplied.", [{"field": x, "code": "UNKNOWN_FIELD", "message": "Field is not part of this resource."} for x in sorted(unknown)])
             data = dict(payload)
             data.setdefault("id", str(uuid.uuid4()))
+            generated = {
+                "perf_performance_indicator": ("indicator_code", "PI", 4),
+                "perf_enterprise_risk": ("risk_code", "ER", 4),
+                "perf_accomplishment": ("accomplishment_code", "ACC", 4),
+                "perf_positive_change_management": ("pcm_code", "PCM", 4),
+                "perf_priority": ("update_code", "PRI", 4),
+                "plan_definition": ("identification_number", "NRC", 4),
+            }.get(resource.table)
+            if generated and not data.get(generated[0]):
+                field, scope, width = generated
+                data[field] = f"{scope}-{draw_identifier(conn, scope):0{width}d}"
             if "owner_user_id" in columns and "owner_team_id" in columns:
                 data.setdefault("owner_user_id", principal.id)
             if "created_by_id" in columns: data.setdefault("created_by_id", principal.id)
@@ -128,7 +139,10 @@ class Repository:
                 try: expected = int(if_match.strip('"'))
                 except ValueError as exc: raise ApiError(400, "VALIDATION_FAILED", "If-Match must contain a row version.") from exc
                 if expected != old_dict["row_version"]:
-                    raise ApiError(409, "CONCURRENCY_CONFLICT", "The record was modified by another request.")
+                    try:
+                        raise ConcurrencyConflict(f"stale {resource.table}:{record_id}")
+                    except ConcurrencyConflict as exc:
+                        raise ApiError(409, "CONCURRENCY_CONFLICT", "The record was modified by another request.") from exc
             unknown = set(payload) - set(columns) - {"id", "row_version", "created_on", "created_by_id"}
             if unknown:
                 raise ApiError(400, "VALIDATION_FAILED", "Unknown or immutable fields were supplied.")

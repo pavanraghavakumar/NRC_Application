@@ -18,6 +18,8 @@ def _migrations():
 
 
 def migrate(path: str | Path) -> list[str]:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=5, isolation_level=None)
     configure_connection(connection)
     connection.execute(

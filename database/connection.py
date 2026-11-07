@@ -33,7 +33,8 @@ class Database:
         self.path = Path(path)
 
     def connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.path, timeout=5, isolation_level=None)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(self.path, timeout=5, isolation_level=None, check_same_thread=False)
         configure_connection(connection)
         return connection
 

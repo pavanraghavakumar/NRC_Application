@@ -11,6 +11,8 @@ from urllib.parse import urlencode
 from fastapi import Body, FastAPI, Header, Request, Response
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 
+from database import migrate
+
 from .auth import Principal, principal_from_request
 from .catalog import RELATIONSHIPS, RESOURCES, WORKFLOW_TYPES
 from .config import Settings
@@ -33,6 +35,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.on_event("startup")
     def startup() -> None:
         db.check_version()
+        if settings.auto_migrate:
+            migrate(settings.database_path)
+        if settings.dev_auth_enabled:
+            dev_user_id = "00000000-0000-4000-8000-000000000001"
+            dev_bu_id = "00000000-0000-4000-8000-000000000002"
+            with db.write() as connection:
+                if db.table_exists(connection, "core_business_unit") and db.table_exists(connection, "core_app_user"):
+                    connection.execute(
+                        "INSERT OR IGNORE INTO core_business_unit(id,name,is_root) VALUES(?,?,1)",
+                        (dev_bu_id, "Development"),
+                    )
+                    connection.execute(
+                        "INSERT OR IGNORE INTO core_app_user(id,domain_name,full_name,internal_email_address,business_unit_id) VALUES(?,?,?,?,?)",
+                        (dev_user_id, "dev@nrc.gov", "Development User", "dev@nrc.gov", dev_bu_id),
+                    )
         if settings.environment != "development" and settings.dev_auth_enabled:
             raise RuntimeError("Development authentication must be disabled outside development.")
 
@@ -335,9 +352,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         principal(request)
         view = "analytics_" + page.replace("/", "_").replace("-", "_")
         with db.read() as conn:
-            if not db.table_exists(conn, view): raise ApiError(503, "ANALYTICS_NOT_READY", f"Analytics view {view} is not installed.")
-            items = [dict(x) for x in conn.execute(f'SELECT * FROM "{view}" LIMIT 1000')]
-            return {"page": page, "generated_at": utc_now(), "filters": dict(request.query_params), "items": items, "summary": {"total": len(items)}, "visuals": []}
+            if db.table_exists(conn, view):
+                items = [dict(x) for x in conn.execute(f'SELECT * FROM "{view}" LIMIT 1000')]
+            else:
+                # Dashboard routes remain useful against a newly migrated, empty
+                # database. Counts are computed from the operational tables and
+                # are never substituted with mocked browser data.
+                items = []
+            counts = {}
+            for label, table in (
+                ("performance_indicators", "perf_performance_indicator"),
+                ("enterprise_risks", "perf_enterprise_risk"),
+                ("priorities", "perf_priority"),
+                ("accomplishments", "perf_accomplishment"),
+                ("positive_change_management", "perf_positive_change_management"),
+            ):
+                if db.table_exists(conn, table):
+                    counts[label] = conn.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
+            return {"page": page, "generated_at": utc_now(), "filters": dict(request.query_params), "items": items, "summary": {"total": len(items), **counts}, "visuals": [], **counts}
 
     @app.get("/api/v1/{resource}/export")
     def export_resource(resource: str, request: Request, format: str = "csv"):
@@ -468,6 +500,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def delete_resource(resource: str, record_id: str, request: Request):
         if resource not in RESOURCES: raise ApiError(404, "NOT_FOUND", "Unknown resource.")
         repo.delete(RESOURCES[resource], record_id, principal(request), request.state.correlation_id)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_spa(full_path: str):
+        root = settings.static_directory.resolve()
+        candidate = (root / full_path).resolve()
+        if root in candidate.parents and candidate.is_file():
+            return FileResponse(candidate)
+        index = root / "index.html"
+        if index.is_file():
+            return FileResponse(index)
+        raise ApiError(404, "NOT_FOUND", "The requested page was not found.")
 
     return app
 

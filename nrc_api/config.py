@@ -16,6 +16,8 @@ class Settings:
     trusted_proxy_secret: str | None
     rate_limit_per_minute: int
     attachment_directory: Path
+    auto_migrate: bool = False
+    static_directory: Path = Path("dist")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -31,5 +33,7 @@ class Settings:
             trusted_proxy_secret=os.getenv("NRC_TRUSTED_PROXY_SECRET"),
             rate_limit_per_minute=int(os.getenv("NRC_RATE_LIMIT_PER_MINUTE", "240")),
             attachment_directory=Path(os.getenv("NRC_ATTACHMENT_DIRECTORY", "data/attachments")),
+            auto_migrate=os.getenv("NRC_AUTO_MIGRATE", "true").lower() == "true",
+            static_directory=Path(os.getenv("NRC_STATIC_DIRECTORY", "dist")),
         )
 
