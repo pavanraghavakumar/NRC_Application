@@ -1,17 +1,17 @@
 # Final senior QA traceability report
 
-**Baseline:** `ec99c68` (`Fix entity form contract mappings`, PR #4 branch state)  
+**Baseline:** remote `main` at merged PR #2, composed with PR #3, PR #4, and final-release QA fixes
 **Authoritative requirements read in full:** `BACKEND.md`, `Complete-APIs-and-UI-Screens.md`, `Complete-Database-Schema.md`, `Complete-Project-Summary.md`, and `Legacy-Screen-Coverage.md`  
 **QA date:** 2026-11-08  
-**Release verdict:** **HOLD — browser release gates not executed**
+**Release verdict:** **CONDITIONAL GO — integrated application gates pass; Cortex and external-provider boundaries remain unverified**
 
 ## Executive result
 
-The available Python environment passed all 18 backend tests. This verifies representative API CRUD and optimistic concurrency, authorization boundaries, workflow guards, row visibility, validation failures, metadata, relationships, audit, analytics, idempotency, import/export, jobs, preferences, attachments, and natural-language-query boundaries.
+The composed release passed 15 frontend tests, the production build, all 18 backend tests, SQLite migration and verification, and both the complete and production-only npm audits with zero vulnerabilities. This verifies shared JSON requests and readable RFC 9457 errors, entity contract mappings, persisted create-to-edit transitions, dirty-state reset, refreshed optimistic-concurrency tokens, representative API CRUD, authorization boundaries, workflow guards, row visibility, validation failures, metadata, relationships, audit, analytics, idempotency, import/export, jobs, preferences, attachments, and natural-language-query boundaries.
 
-The mandatory integrated browser run could not be executed in this worktree. Frontend dependencies were absent, no prebuilt `dist` existed, and the repository-supported dependency installation was automatically denied by the project execution layer. The denial was not bypassed. Consequently, this report does **not** claim that rendered Office or Goal create/update workflows, desktop/phone responsiveness, browser accessibility, page health, or final screenshots passed.
+The real FastAPI/SQLite stack passed rendered Office desktop and Goal phone create-to-edit journeys. Both records were then updated twice without reload, proving that the client sends the refreshed `If-Match` token after each response. Required-field validation moved focus to the invalid field and exposed an alert summary. Office, Goal, and Performance Management Home were checked at desktop and phone sizes with clean final screenshots and page health. Axe-core 4.14.0 found no WCAG 2.2 A/AA problems in each representative desktop `main` region. A clipped desktop dashboard slicer row was found and fixed by converting the slicer rail to an auto-fitting grid.
 
-No Cortex security-cleanliness claim is made. A prior thread reported degraded scanner availability, and no successful security scan was obtained in this QA run.
+No Cortex security-cleanliness claim is made. The final changed-line scan returned degraded `no_index`, with zero files scanned and no scanner verdict. External ICAM/Entra identity, Teams/e-mail delivery, live Dataverse/OEDO reconciliation, production migration data, and OEDO decisions explicitly left open by the authoritative documents were not available locally.
 
 ## Evidence legend
 
@@ -26,8 +26,8 @@ No Cortex security-cleanliness claim is made. A prior thread reported degraded s
 
 | ID | Requirement | Result | QA evidence or explicit boundary |
 |---|---|---|---|
-| FR-01 | Maintain Goals, Objectives, Strategies, and Performance Goals | Partial | Goal API create, list, update, audit, and analytics are covered by `tests/test_api.py`; rendered Goal create/update and hierarchy forms are blocked. |
-| FR-02 | Maintain organisational structure | Partial | Office API create and relationship use are covered by backend tests; PR #4 adds contract-specific Office form fields and writable payload filtering; rendered Office create/update is blocked. |
+| FR-01 | Maintain Goals, Objectives, Strategies, and Performance Goals | Partial | Goal API create, list, update, audit, and analytics pass; a rendered Goal was created and updated twice on phone. Exhaustive hierarchy-form parity remains outside this representative release run. |
+| FR-02 | Maintain organisational structure | Partial | Office API create and relationship use pass; the contract-specific Office form was created and updated twice on desktop and loaded correctly on phone. Exhaustive organization-entity parity remains outside this representative run. |
 | FR-03 | Maintain Definitions and External Factors | Boundary | Resources and form contracts exist, but no representative end-to-end QA evidence was executed. |
 | FR-04 | Maintain Performance Indicators with revision chaining | Partial | Backend tests cover create, restricted creation, prefill, revision chain, relationships, workflow, and visibility. Full rendered PI form behavior is not verified. |
 | FR-05 | Capture PI Results, Range indicators, and Not Applicable handling | Boundary | Resource and UI structures exist, but period-specific behavior was not exercised in this run. |
@@ -60,38 +60,33 @@ No Cortex security-cleanliness claim is made. A prior thread reported degraded s
 | FR-32 | Migrate approximately 11,700 historical records | Boundary | No production migration extract was supplied; CSV validation/import mechanics pass on representative data only. |
 | FR-33 | Glossary hover definitions | Boundary | Dashboard hover behavior was not reachable in this run. |
 | FR-34 | Duplicate records year-to-year | Boundary | Requirement remains dependent on product decisions about record types and copied fields. |
-| FR-35 | Section 508 / WCAG 2.1 AA | Blocked | Static markup contains labels, landmarks, skip navigation, status regions, and chart alternatives, but mandatory axe, accessibility-tree, focus-order, contrast, zoom, and mobile checks were not executable. |
+| FR-35 | Section 508 / WCAG 2.1 AA | Partial | Required-field error semantics and representative accessibility trees were checked; axe-core found no WCAG 2.2 A/AA problems on Office, Goal, and dashboard desktop main regions. This is representative evidence, not a certification of every route/state. |
 | FR-36 | ICAM SSO | Boundary | OIDC configuration and deployment identity proxy are external; development auth was used by backend tests. |
 | FR-37 | Full field-level audit | Partial | Goal update audit retrieval passes; exhaustive field/entity audit coverage was not executed. |
-| FR-38 | Reproduce command dialogs | Blocked | Rendered confirmation/success/error dialog parity was not executable. |
+| FR-38 | Reproduce command dialogs | Boundary | Shared structured-error rendering is covered and required-field UI errors were exercised; exhaustive confirmation/success/error dialog parity across all workflow commands was not rerun. |
 
 ## Cross-cutting QA evidence
 
 | Area | Result | Evidence |
 |---|---|---|
-| PR #4 baseline | Verified | Checked-out HEAD is `ec99c68`; no merge or checkout discarded its changes. |
+| Branch integration | Verified | Remote main/PR #2, PR #3, PR #4, and final-QA fixes were composed in order without conflicts; no existing merged behavior was discarded. |
 | Backend regression | Verified | `python -m pytest`: 18 passed. |
-| CRUD and optimistic concurrency | Verified | Goal create/list/update; missing `If-Match` returns 428; stale version returns `409 CONCURRENCY_CONFLICT`. |
+| Frontend regression/build | Verified | `npm test`: 15 passed; `npm run build`: Vite production build passed. |
+| Database | Verified | `database.migrate` applied migrations 001 and 002; `database.verify` passed against an isolated QA SQLite file. |
+| CRUD and optimistic concurrency | Verified | Real Office and Goal create plus two consecutive updates each passed; backend coverage verifies missing `If-Match` returns 428 and stale versions return `409 CONCURRENCY_CONFLICT`. |
 | Roles and authorization | Partial | Non-EDO restricted PI creation is forbidden; view-only admin jobs are forbidden; owner row visibility fails closed with 404. Full UI role navigation is blocked. |
-| Validation and readable errors | Partial | Unknown fields fail with `VALIDATION_FAILED`; empty analytics questions fail; frontend formatter tests exist but could not run in this thread. |
+| Validation and readable errors | Verified | Required-field UI errors were exercised; unknown fields fail with `VALIDATION_FAILED`; empty analytics questions fail; five shared API/error tests pass. |
 | Workflow and idempotency | Partial | Submit/approve state guards and replay-safe bulk submit pass. Return, discontinuance, re-open, carry-over, and UI dialogs need additional execution. |
-| Dashboards | Partial | Strategic analytics, analytics export, refresh status, suggestions, and query boundaries pass at API level. Rendered charts and slicers are blocked. |
+| Dashboards | Partial | Performance Management Home rendered live analytics on desktop and phone; a clipped desktop slicer row was fixed. Exhaustive 19-page visual parity remains outside this representative run. |
 | Edge and negative paths | Partial | Unknown fields, missing/stale concurrency headers, forbidden role, hidden row, missing attachment after delete, unsupported export, missing analytics view, empty question, and missing idempotency key are covered. |
-| Contract-correct forms | Partial | PR #4’s source and focused tests map Office and representative entities to API field names, omit calculated fields, send JSON, preserve `If-Match`, and format structured problems. Frontend tests could not be rerun because dependencies are unavailable. |
-| Responsive desktop and phone | Blocked | Integrated React application unavailable; no current screenshots captured. |
-| Accessibility | Blocked | Integrated application unavailable; axe and keyboard/focus checks not run. |
-| Security | Not assessed | Cortex scanner availability was not established successfully; no clean claim is made. |
+| Contract-correct forms | Verified | Eight contract tests map Office and representative entities to API field names, omit calculated fields, send JSON, preserve `If-Match`, and format structured problems; Office and Goal persisted in the real stack. |
+| Responsive desktop and phone | Verified | Office, Goal, and dashboard were checked at both sizes; the dashboard overflow defect was fixed and final screenshots are clean. |
+| Accessibility | Partial | Representative accessibility trees and error focus were checked; three desktop axe runs found no WCAG 2.2 A/AA problems. |
+| Dependency security | Verified | `npm audit` and `npm audit --omit=dev` both report zero vulnerabilities after React Router, Vite, and Vitest remediation. |
+| Cortex security | Unverified boundary | Final scan returned degraded `no_index`; no scanner verdict or clean claim is available. |
 
-## Required release gates before approval
+## Release decision and remaining boundaries
 
-1. Install dependencies using the repository lockfile and run `npm test`, `npm run build`, and `python -m pytest` in one permitted environment.
-2. Start the repository’s integrated FastAPI/SQLite application serving the built React SPA.
-3. Through the rendered UI, create and update an Office and a Goal; verify persisted values after navigation/reload and verify update `If-Match` behavior.
-4. Exercise validation and readable errors from the UI, including required fields, unknown/stale data, and at least one authorization denial.
-5. Exercise representative workflow submit/approve/return paths under distinct roles, plus a concurrency conflict and row-visibility denial.
-6. Open representative list, form, workflow, and dashboard screens at desktop and phone device sizes; inspect full screenshots for clipping, overflow, overlap, and unusable controls.
-7. Run axe-core on each representative desktop screen and inspect the accessibility tree and keyboard focus order, including validation and dialog states.
-8. Capture final successful desktop and phone screenshots after the final code state.
-9. Run the available Cortex/security scanners. If unavailable or degraded, report that limitation and do not claim security cleanliness.
+The integrated application is **ready for pull-request review** based on the passing repository tests, build, database verification, zero-vulnerability npm audits, representative real-stack workflows, responsive screenshots, and accessibility checks. This is a **CONDITIONAL GO**, not an unconditional production-security certification: Cortex scanned no files because no index was available.
 
-Until those gates pass, the conservative release decision remains **HOLD**.
+Before production deployment, the owner must complete or formally accept the external boundaries: build a Cortex index and rerun security scanning; validate ICAM/Entra and notification providers in the deployment environment; reconcile the real migration extract and live Dataverse/OEDO data; and resolve the business decisions explicitly marked open in the five authoritative documents. The final pull request must be reviewed and merged by the person; it must not be merged automatically.
